@@ -43,7 +43,7 @@ first_detect = True
 def init():
     global movement_sensor_sub, nav_status_sub, pub_stop, pc_battery_sub, kobuki_battery_sub
     global check_batteries, joy_sub, sound_pub, int_pub, instruction_pub
-    rospy.init_node('radio_node_manager')
+    rospy.init_node('radio_node_manager_main_controller')
     check_batteries = rospy.get_param("~check_batteries", False)
     instruction_topic = rospy.get_param("~instruction_topic", "radio_node_manager_main_controller/instruction")
     movement_sensor_sub = rospy.Subscriber('motion_detection_sensor_status_publisher/status', SensorStatusMsg, motionSensorStatus)
@@ -53,7 +53,7 @@ def init():
     goal_subscriber = rospy.Subscriber("/move_base/goal", MoveBaseActionGoal, getGoalPoint)
     pub_stop = rospy.Publisher('move_base/cancel', GoalID, queue_size=10)
     int_pub = rospy.Publisher('radio_generate_report', Int32, queue_size=1)
-    int_pub = rospy.Publisher(instruction_topic, Int32, queue_size=1)
+    instruction_pub = rospy.Publisher(instruction_topic, Int32, queue_size=1)
     if check_batteries:
         #pc_battery_sub = rospy.Subscriber('placeholder', PlaceHolderMsg, pcBatteryCallback)
         kobuki_battery_sub = rospy.Subscriber('mobile_base/sensors/core', SensorState, kobukiBatteryCallback)
@@ -96,10 +96,10 @@ def currentNavStatus(current_status_msg):
                 print 'Send navigation error to the user'
         else:
             if status == 1:
-                startStopHPR(False, True)
-                startStopRosVisual(False, True)
-                startStopMotionAnalysisHuman(False, True)
-                startStopMotionAnalysisObject(False, True)
+                HPR(False)
+                rosVisual(False)
+                motionAnalysisHuman(False)
+                motionAnalysisObject(False)
                 navigating = True
 
 def getGoalPoint(goal_msg):
@@ -281,7 +281,7 @@ def motionAnalysisObject(start):
             sound_msg.value = 1
             sound_pub.publish(sound_msg)
 
-def rosVisual(start, stop):
+def rosVisual(start):
     global running_ros_visual, sound_pub, instruction_pub
     if start:
         if not running_ros_visual:
@@ -305,6 +305,9 @@ def rosVisual(start, stop):
             command = shlex.split(command)
             subprocess.Popen(command)
             command = "rosnode kill chroma"
+            command = shlex.split(command)
+            subprocess.Popen(command)
+	    command = "rosnode kill classifier"
             command = shlex.split(command)
             subprocess.Popen(command)
             command = "rosnode kill ros_visual_wrapper"
