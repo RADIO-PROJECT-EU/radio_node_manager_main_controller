@@ -1,7 +1,8 @@
 #!/usr/bin/env python
 import os
+import threading
 import math, time
-import rospy
+import rospy, rospkg
 import subprocess, shlex
 from datetime import datetime
 from std_msgs.msg import Int32
@@ -10,27 +11,25 @@ from kobuki_msgs.msg import Sound
 from actionlib_msgs.msg import GoalID
 from kobuki_msgs.msg import SensorState
 from sensor_msgs.msg import BatteryState
+from geometry_msgs.msg import PoseStamped
 from actionlib_msgs.msg import GoalStatusArray
-from move_base_msgs.msg import MoveBaseActionGoal
-from motion_detection_sensor_status_publisher.msg import SensorStatusMsg
+#from move_base_msgs.msg import MoveBaseActionGoal
+#from motion_detection_sensor_status_publisher.msg import SensorStatusMsg
 
 running_motion_analysis_human = False
 running_motion_analysis_obj = False
+timeBasedEventsThread = None
 running_ros_visual = False
-movement_sensor_sub = None
 pc_needs_to_charge = False
-kobuki_battery_sub = None
 kobuki_max_charge = 164 #Validated fully charged battery value
 check_batteries = False
-nav_status_sub = None
-pc_battery_sub = None
+instruction_pub = None
 running_hpr = False
 navigating = False
 charging = False
 sound_pub = None
-instruction_pub = None
-goal_point = []
-int_sub = None
+state_file = ''
+next_state = 0 # States are 0=new breakfast, 1=lunch, 2=dinner, 3=breakfast
 joy_pub = None
 
 #first_detect becomes false the first time we see 'ok'
@@ -41,25 +40,37 @@ first_detect = True
 
 
 def init():
-    global movement_sensor_sub, nav_status_sub, pub_stop, pc_battery_sub, kobuki_battery_sub
-    global check_batteries, joy_sub, sound_pub, int_pub, instruction_pub
+    global pub_stop, check_batteries, sound_pub, int_pub, instruction_pub, state_file
     rospy.init_node('radio_node_manager_main_controller')
     check_batteries = rospy.get_param("~check_batteries", False)
     instruction_topic = rospy.get_param("~instruction_topic", "radio_node_manager_main_controller/instruction")
-    movement_sensor_sub = rospy.Subscriber('motion_detection_sensor_status_publisher/status', SensorStatusMsg, motionSensorStatus)
-    nav_status_sub = rospy.Subscriber('move_base/status', GoalStatusArray, currentNavStatus)
-    joy_sub = rospy.Subscriber('joy', Joy, joyCallback)
+    #rospy.Subscriber('motion_detection_sensor_status_publisher/status', SensorStatusMsg, motionSensorStatus)
+    rospy.Subscriber('move_base/status', GoalStatusArray, currentNavStatus)
+    rospy.Subscriber('joy', Joy, joyCallback)
     sound_pub = rospy.Publisher('mobile_base/commands/sound', Sound)
-    goal_subscriber = rospy.Subscriber("/move_base/goal", MoveBaseActionGoal, getGoalPoint)
+    #rospy.Subscriber("/move_base/goal", MoveBaseActionGoal, getGoalPoint)
     pub_stop = rospy.Publisher('move_base/cancel', GoalID, queue_size=10)
     int_pub = rospy.Publisher('radio_generate_report', Int32, queue_size=1)
     instruction_pub = rospy.Publisher(instruction_topic, Int32, queue_size=1)
-    if check_batteries:
-        #pc_battery_sub = rospy.Subscriber('placeholder', PlaceHolderMsg, pcBatteryCallback)
-        kobuki_battery_sub = rospy.Subscriber('mobile_base/sensors/core', SensorState, kobukiBatteryCallback)
+    rospy.Subscriber("android_app/goal", PoseStamped, androidGoal)
+    rospy.Subscriber("android_app/other", Int32, androidOther)
 
-    while not rospy.is_shutdown():  
+    rospack = rospkg.RosPack()
+    state_file = rospack.get_path('radio_node_manager_main_controller')+'/state/saved.state'
+
+    timeBasedEvents()
+
+    if os.path.isfile(state_file):
+        with open(state_file) as f:
+            next_state = int(f.read())
+
+    if check_batteries:
+        #rospy.Subscriber('placeholder', PlaceHolderMsg, pcBatteryCallback)
+        rospy.Subscriber('mobile_base/sensors/core', SensorState, kobukiBatteryCallback)
+
+    while not rospy.is_shutdown():
         rospy.spin()
+    timeBasedEventsThread.cancel()
 
 '''
 0   # The goal has yet to be processed by the action server
@@ -81,7 +92,7 @@ def init():
     # sent over the wire by an action server
 '''
 def currentNavStatus(current_status_msg):
-    global goal_point, goal_reached, navigating
+    global navigating
     if len(current_status_msg.status_list) > 0:
         status =  current_status_msg.status_list[0].status
         if navigating:
@@ -102,15 +113,33 @@ def currentNavStatus(current_status_msg):
                 motionAnalysisObject(False)
                 navigating = True
 
+def androidGoal(goal_msg):
+    global goal_publisher
+    # Here we can check anything we need before publishing
+    # the message coming from the user's android app
+    # For now, just send the robot the goal message
+    goal_publisher.publish(goal_msg)
+
+def androidOther(msg):
+    # Map:
+    # -1 = Cancel navigation goal
+    # More to come (?)
+    if msg.data == -1:
+        # Here we can check anything we need before publishing
+        # the message coming from the user's android app
+        # For now, just send the robot the cancel goal message
+        cancelNavigationGoal()
+
 def getGoalPoint(goal_msg):
     global gym_x, gym_y
     print goal_msg
 
+'''
 def motionSensorStatus(ssm):
     global running_motion_analysis_human, first_detect, running_hpr, sound_pub
-    global movement_sensor_sub
     cur_st = ssm.status
     print curr_st
+'''
 
 #this method only changes the pc_needs_to_charge value. The rest are left for
 #the kobukiBatteryCallback method.
@@ -152,7 +181,19 @@ def createReport():
     global int_pub
     int_pub.publish(0)
 
+def saveState():
+    global next_state, state_file
+    with open(state_file,'w') as f:
+        f.write(next_state)
 
+def timeBasedEvents():
+    global timeBasedEventsThread
+    # Check time every 10 minutes
+    timeBasedEventsThread = threading.Timer(600, timeBasedEvents)
+    timeBasedEventsThread.start()
+    timestamp = time.strftime('%H:%M:%S')
+    # Do something based on timestamp
+    print timestamp
 
 
 def joyCallback(msg):
@@ -307,7 +348,7 @@ def rosVisual(start):
             command = "rosnode kill chroma"
             command = shlex.split(command)
             subprocess.Popen(command)
-	    command = "rosnode kill classifier"
+            command = "rosnode kill classifier"
             command = shlex.split(command)
             subprocess.Popen(command)
             command = "rosnode kill ros_visual_wrapper"
