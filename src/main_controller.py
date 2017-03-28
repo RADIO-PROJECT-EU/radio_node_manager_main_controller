@@ -19,14 +19,18 @@ from actionlib_msgs.msg import GoalStatusArray
 running_motion_analysis_human = False
 running_motion_analysis_obj = False
 timeBasedEventsThread = None
+chargingCheckThread = None
 running_ros_visual = False
 pc_needs_to_charge = False
 kobuki_max_charge = 164 #Validated fully charged battery value
 check_batteries = False
 instruction_pub = None
+pill_intake_mode = 1
 running_hpr = False
 navigating = False
 charging = False
+curr_battery = kobuki_max_charge
+prev_battery = kobuki_max_charge
 sound_pub = None
 state_file = ''
 next_state = 0 # States are 0=new breakfast, 1=lunch, 2=dinner, 3=breakfast
@@ -42,7 +46,7 @@ first_detect = True
 def init():
     global pub_stop, check_batteries, sound_pub, int_pub, instruction_pub, state_file
     rospy.init_node('radio_node_manager_main_controller')
-    check_batteries = rospy.get_param("~check_batteries", False)
+    check_batteries = rospy.get_param("~check_batteries", True)
     instruction_topic = rospy.get_param("~instruction_topic", "radio_node_manager_main_controller/instruction")
     #rospy.Subscriber('motion_detection_sensor_status_publisher/status', SensorStatusMsg, motionSensorStatus)
     rospy.Subscriber('move_base/status', GoalStatusArray, currentNavStatus)
@@ -131,7 +135,6 @@ def androidOther(msg):
         cancelNavigationGoal()
 
 def getGoalPoint(goal_msg):
-    global gym_x, gym_y
     print goal_msg
 
 '''
@@ -154,7 +157,9 @@ def pcBatteryCallback(msg):
 
 def kobukiBatteryCallback(msg):
     global kobuki_max_charge, charging, pc_needs_to_charge, navigating
-    #print msg
+    global curr_battery
+    '''
+    print msg
     if (msg.battery/kobuki_max_charge*100) < 0.05 or pc_needs_to_charge: #less that 5% battery on kobuki
         if msg.charger == 0:
             charging = False
@@ -166,6 +171,8 @@ def kobukiBatteryCallback(msg):
         else:
             print 'Charging'
             charging = True
+    '''
+    curr_battery = msg.battery
 
 def cancelNavigationGoal():
     global pub_stop, navigating, sound_pub
@@ -181,20 +188,120 @@ def createReport():
     global int_pub
     int_pub.publish(0)
 
+def initial_pose():
+    global instruction_pub
+    instruction_pub.publish(5)
+
 def saveState():
     global next_state, state_file
     with open(state_file,'w') as f:
         f.write(next_state)
 
+def updateState():
+    global next_state
+    next_state += 1
+    if next_state > 3:
+        next_state = 0
+
+def checkIfCharging():
+    global charging, chargingCheckThread, prev_battery, curr_battery
+    chargingCheckThread = threading.Timer(300, checkIfCharging)
+    chargingCheckThread.start()
+    if prev_battery < curr_battery:
+        charging = True
+        chargingCheckThread.cancel()
+    elif prev_battery > curr_battery:
+        charging = False
+        chargingCheckThread.cancel()
+
+def goChargeNow():
+    global goal_publisher
+    # TODO before docking position
+    goal_msg = PoseStamped()
+    goal_msg.header.stamp = rospy.Time.now()
+    goal_msg.header.frame_id = 'map'
+    #goal_msg.pose.position.x = 123
+    #goal_msg.pose.position.y = 321
+    #goal_msg.pose.orientation.z = 1
+    #goal_msg.pose.orientation.z = 2
+    goal_publisher.publish(goal_msg)
+    # TODO Check if we have arrived in the docking position
+    # and then enable auto-docking
+    #dock()
+    #checkIfCharging()
+
+def dock():
+    global instruction_pub
+    instruction_pub.publish(4)
+
+def goTo(x,y,z,w):
+    global goal_publisher
+    goal_msg = PoseStamped()
+    goal_msg.header.stamp = rospy.Time.now()
+    goal_msg.header.frame_id = 'map'
+    goal_msg.pose.position.x = x
+    goal_msg.pose.position.y = y
+    goal_msg.pose.orientation.z = z
+    goal_msg.pose.orientation.w = w
+    goal_publisher.publish(goal_msg)
+
 def timeBasedEvents():
-    global timeBasedEventsThread
+    global timeBasedEventsThread, charging
+    global prev_battery, curr_battery, chargingCheckThread
     # Check time every 10 minutes
     timeBasedEventsThread = threading.Timer(600, timeBasedEvents)
     timeBasedEventsThread.start()
     timestamp = time.strftime('%H:%M:%S')
     # Do something based on timestamp
-    print timestamp
-
+    h = timestamp.split(':')[0]
+    m = timestamp.split(':')[1]
+    if h >= 21 and not charging:
+        charging = True
+        if chargingCheckThread is not None:
+            if not chargingCheckThread.isAlive():
+                goChargeNow()
+                prev_battery = curr_battery
+        else:
+            goChargeNow()
+            prev_battery = curr_battery
+    elif h>=18 and m >=30 and next_state == 2:
+        charging = False
+        updateState()
+        # TODO ADL position 2
+        #goTo(123,321,2.1,3.2)
+    elif h >= 15 and m >=30 and not charging:
+        charging = True
+        if chargingCheckThread is not None:
+            if not chargingCheckThread.isAlive():
+                goChargeNow()
+                prev_battery = curr_battery
+        else:
+            goChargeNow()
+            prev_battery = curr_battery
+    elif h >= 13 and m >=15 and next_state == 1:
+        charging = False
+        updateState()
+        # TODO ADL position 1
+        # TODO Check if the robot is in the correct position
+        # (it should be in the position) that was published at around 10:45
+        #goTo(123,321,2.1,3.2)
+    elif h >= 10 and m >= 45 and next_state == 0:
+        charging = False
+        updateState()
+        # TODO ADL position 1
+        #goTo(123,321,2.1,3.2)
+    elif h >= 9 and m >= 45 and not charging:
+        charging = True
+        if chargingCheckThread is not None:
+            if not chargingCheckThread.isAlive():
+                goChargeNow()
+                prev_battery = curr_battery
+        else:
+            goChargeNow()
+            prev_battery = curr_battery
+    elif h >= 7 and m >= 45 and next_state == 3:
+        # TODO ADL position 1
+        #goTo(123,321,2.1,3.2)
 
 def joyCallback(msg):
     global ost_pub, instruction_pub
@@ -227,13 +334,15 @@ def joyCallback(msg):
         cancelNavigationGoal()
     if msg.buttons[7] == 1:
         createReport()
+    '''
     if msg.buttons[5] == 1:
-        ost_pub.publish(2)
-        sound_msg = Sound()
-        sound_msg.value = 0
-        sound_pub.publish(sound_msg)
+        #ost_pub.publish(2)
+        #sound_msg = Sound()
+        #sound_msg.value = 0
+        #sound_pub.publish(sound_msg)
+    '''
     if msg.buttons[10] == 1:
-        instruction_pub.publish(4)
+        dock()
     if msg.buttons[2] == 1 and msg.axes[5] != 0 and msg.axes[5] != 1:
         HPR(False)
     if msg.buttons[0] == 1 and msg.axes[5] != 0 and msg.axes[5] != 1:
@@ -301,11 +410,16 @@ def motionAnalysisObject(start):
     global running_motion_analysis_obj, sound_pub, instruction_pub
     if start:
         if not running_motion_analysis_obj:
-            instruction_pub.publish(2)
+            if pill_intake_mode == 1:
+                instruction_pub.publish(2)
+            else:
+                instruction_pub.publish(22)
             command = "roslaunch motion_analysis_wrapper wrapper.launch"
             command = shlex.split(command)
             subprocess.Popen(command)
             running_motion_analysis_obj = True
+            time.sleep(10)
+            ost_pub.publish(2)
             sound_msg = Sound()
             sound_msg.value = 0
             sound_pub.publish(sound_msg)
@@ -361,4 +475,3 @@ def rosVisual(start):
 
 if __name__ == '__main__':
     init() 
-
