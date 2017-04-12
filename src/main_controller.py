@@ -19,8 +19,6 @@ from actionlib_msgs.msg import GoalStatusArray
 
 running_motion_analysis_human = False
 running_motion_analysis_obj = False
-curr_battery = kobuki_max_charge
-prev_battery = kobuki_max_charge
 timeBasedEventsThread = None
 chargingCheckThread = None
 running_ros_visual = False
@@ -28,10 +26,14 @@ pc_needs_to_charge = False
 kobuki_max_charge = 164 #Validated fully charged battery value
 check_batteries = False
 instruction_pub = None
+goal_publisher = None
 pill_intake_mode = 1
+goal_reached = False
 running_hpr = False
 docking_pos = None
 navigating = False
+curr_battery = 0
+prev_battery = 0
 charging = False
 sound_pub = None
 twist_pub = None
@@ -43,27 +45,34 @@ joy_pub = None
 
 
 def init():
-    global pub_stop, check_batteries, sound_pub, int_pub, instruction_pub, state_file
+    global pub_stop, check_batteries, sound_pub, int_pub, instruction_pub
+    global state_file, goal_publisher, twist_pub
     rospy.init_node('radio_node_manager_main_controller')
     check_batteries = rospy.get_param("~check_batteries", True)
     instruction_topic = rospy.get_param("~instruction_topic", "radio_node_manager_main_controller/instruction")
     #rospy.Subscriber('motion_detection_sensor_status_publisher/status', SensorStatusMsg, motionSensorStatus)
     rospy.Subscriber('move_base/status', GoalStatusArray, currentNavStatus)
     rospy.Subscriber('joy', Joy, joyCallback)
-    sound_pub = rospy.Publisher('mobile_base/commands/sound', Sound)
-    #rospy.Subscriber("/move_base/goal", MoveBaseActionGoal, getGoalPoint)
+    sound_pub = rospy.Publisher('mobile_base/commands/sound', Sound, queue_size=1)
+    #rospy.Subscriber("/move_base/goal", PoseStamped, getGoalPoint)
     pub_stop = rospy.Publisher('move_base/cancel', GoalID, queue_size=10)
     int_pub = rospy.Publisher('radio_generate_report', Int32, queue_size=1)
-    twist_pub = rospy.Publisher('cmd_vel', Twist, queue_size=1)
+    twist_pub = rospy.Publisher('cmd_vel_mux/input/navi', Twist, queue_size=1)
     instruction_pub = rospy.Publisher(instruction_topic, Int32, queue_size=1)
     rospy.Subscriber("android_app/goal", PoseStamped, androidGoal)
     rospy.Subscriber("android_app/other", Int32, androidOther)
+    goal_publisher = rospy.Publisher('move_base_simple/goal', PoseStamped, queue_size=1)
 
     rospack = rospkg.RosPack()
     state_file = rospack.get_path('radio_node_manager_main_controller')+'/state/saved.state'
 
     initGoalPoints()
-    timeBasedEvents()
+    time.sleep(10)
+    global prev_battery
+    prev_battery = 200
+    #goTo(adl_pos2)
+    goChargeNow()
+    #timeBasedEvents()
 
     if os.path.isfile(state_file):
         with open(state_file) as f:
@@ -75,7 +84,10 @@ def init():
 
     while not rospy.is_shutdown():
         rospy.spin()
-    timeBasedEventsThread.cancel()
+    if timeBasedEventsThread is not None:
+        timeBasedEventsThread.cancel()
+    if chargingCheckThread is not None:
+        chargingCheckThread.cancel()
 
 '''
 0   # The goal has yet to be processed by the action server
@@ -97,12 +109,13 @@ def init():
     # sent over the wire by an action server
 '''
 def currentNavStatus(current_status_msg):
-    global navigating
+    global navigating, goal_reached
     if len(current_status_msg.status_list) > 0:
         status =  current_status_msg.status_list[0].status
         if navigating:
             if status == 3:
                 navigating = False
+                goal_reached = True
                 #print 'Starting motion_analysis'
                 #print 'Starting HPR'
                 print 'Reached destination!'
@@ -112,6 +125,7 @@ def currentNavStatus(current_status_msg):
                 print 'Send navigation error to the user'
         else:
             if status == 1:
+                goal_reached = False
                 HPR(False)
                 rosVisual(False)
                 motionAnalysisHuman(False)
@@ -184,7 +198,6 @@ def cancelNavigationGoal():
     sound_msg.value = 0
     sound_pub.publish(sound_msg)
 
-
 def createReport():
     global int_pub
     int_pub.publish(0)
@@ -211,29 +224,39 @@ def blindBack():
     dt = datetime.now()
     start = dt.minute*60000000 + dt.second*1000000 + dt.microsecond
     finish = start
-    while finish - start < 1.5:
-        twist_pub(cmd_vel)
+    while finish - start < 150000:
+        print 'go baaack!'
+        twist_pub.publish(cmd_vel)
         dt = datetime.now()
         finish = dt.minute*60000000 + dt.second*1000000 + dt.microsecond
+        print '---'
+        print finish
+        print start
+        print '---'
 
 def checkIfCharging():
     global charging, chargingCheckThread, prev_battery, curr_battery
-    chargingCheckThread = threading.Timer(300, checkIfCharging)
+    chargingCheckThread = threading.Timer(30, checkIfCharging)
+    print 'checking with prev = ' + str(prev_battery) + ' and curr = ' + str(curr_battery)
     chargingCheckThread.start()
     if prev_battery < curr_battery:
         charging = True
         chargingCheckThread.cancel()
     elif prev_battery > curr_battery:
         charging = False
+        print 'Oh noes! I am not charging!!!'
         chargingCheckThread.cancel()
         blindBack()
         goChargeNow()
 
 def goChargeNow():
-    global docking_pos
+    global docking_pos, goal_reached
     goTo(docking_pos)
-    # TODO Check if we have arrived in the docking position
-    # and then enable auto-docking
+    time.sleep(10)
+    while not goal_reached:
+        time.sleep(2)
+    print 'I know we are there! Now Imma check if I am charging!'
+    # We now know when we arrived in the docking position! Now dock!!
     # dock()
     checkIfCharging()
 
@@ -242,7 +265,7 @@ def dock():
     instruction_pub.publish(4)
 
 def goTo(x,y,z,w):
-    global goal_publisher
+    global goal_publisher, goal_reached, navigating
     goal_msg = PoseStamped()
     goal_msg.header.stamp = rospy.Time.now()
     goal_msg.header.frame_id = 'map'
@@ -251,29 +274,33 @@ def goTo(x,y,z,w):
     goal_msg.pose.orientation.z = z
     goal_msg.pose.orientation.w = w
     goal_publisher.publish(goal_msg)
+    goal_reached = False
+    navigating = True
 
 def goTo(goal_msg):
-    global goal_publisher
+    global goal_publisher, goal_reached, navigating
     goal_msg.header.stamp = rospy.Time.now()
     goal_publisher.publish(goal_msg)
+    goal_reached = False
+    navigating = True
 
 def initGoalPoints():
     global adl_pos1, adl_pos2, docking_pos
     adl_pos1 = PoseStamped()
     adl_pos1.header.stamp = rospy.Time.now()
     adl_pos1.header.frame_id = 'map'
-    adl_pos1.pose.position.x = -4.44073893475
-    adl_pos1.pose.position.y = 2.94890442197
-    adl_pos1.pose.orientation.z = 0.108956946383
-    adl_pos1.pose.orientation.w = 0.994046469656
+    adl_pos1.pose.position.x = -4.66805749793
+    adl_pos1.pose.position.y = 2.97347905327
+    adl_pos1.pose.orientation.z = 0.296646442416
+    adl_pos1.pose.orientation.w = 0.954987375939
 
     adl_pos2 = PoseStamped()
     adl_pos2.header.stamp = rospy.Time.now()
     adl_pos2.header.frame_id = 'map'
-    adl_pos2.pose.position.x = -4.49534673428
-    adl_pos2.pose.position.y = 7.58239638777
-    adl_pos2.pose.orientation.z = -0.603909423925
-    adl_pos2.pose.orientation.w = 0.797052951625
+    adl_pos2.pose.position.x = -4.44401648886
+    adl_pos2.pose.position.y = 7.49628868363
+    adl_pos2.pose.orientation.z = -0.689436075633
+    adl_pos2.pose.orientation.w = 0.724346531445
 
     docking_pos = PoseStamped()
     docking_pos.header.stamp = rospy.Time.now()
@@ -524,4 +551,4 @@ def rosVisual(start):
             sound_pub.publish(sound_msg)
 
 if __name__ == '__main__':
-    init() 
+    init()
