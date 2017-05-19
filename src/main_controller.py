@@ -360,16 +360,18 @@ def timeBasedEvents():
             else:
                 goChargeNow()
                 prev_battery = curr_battery
-        elif h >= 10 and m >= 45 and (next_state == 0 or next_state == 2):
+        elif h >= 11 and m >= 25 and  next_state == 0:
             charging = False
             blindBack()
             initial_pose()
-            if next_state == 0:
-                goTo(adl_pos1)
-            else:
-                goTo(adl_pos2)
+            goTo(adl_pos1)
             updateState()
-        elif h >= 10 and m >= 15 and not charging:
+        elif h >= 10 and m >= 45 and  next_state == 1:
+            charging = False
+            blindBack()
+            initial_pose()
+            goTo(adl_pos2)
+        elif h >= 10 and not charging:
             charging = True
             if chargingCheckThread is not None:
                 if not chargingCheckThread.isAlive():
