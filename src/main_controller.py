@@ -40,7 +40,7 @@ twist_pub = None
 adl_pos1 = None
 adl_pos2 = None
 state_file = ''
-next_state = 0 # States are 0=new breakfast, 1=lunch, 2=dinner, 3=breakfast
+next_state = 0 # States are 0 = new breakfast (day 1), 1=lunch (day 2), 2 = dinner (day 2), 3 = breakfast (day 3)
 joy_pub = None
 
 
@@ -78,7 +78,7 @@ def init():
     initGoalPoints()
     initial_pose()
     clear_costmap()
-    #timeBasedEvents()
+    timeBasedEvents()
 
     while not rospy.is_shutdown():
         rospy.spin()
