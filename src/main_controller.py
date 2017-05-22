@@ -509,7 +509,6 @@ def motionAnalysisObject(start):
             subprocess.Popen(command)
             running_motion_analysis_obj = True
             time.sleep(10)
-            ost_pub.publish(2)
             sound_msg = Sound()
             sound_msg.value = 0
             sound_pub.publish(sound_msg)
