@@ -78,7 +78,7 @@ def init():
     initGoalPoints()
     initial_pose()
     clear_costmap()
-    timeBasedEvents()
+    #timeBasedEvents()
 
     while not rospy.is_shutdown():
         rospy.spin()
@@ -258,9 +258,10 @@ def dock():
     global instruction_pub
     instruction_pub.publish(4)
 
-def goTo(x,y,z,w):
+def goTo2(x,y,z,w):
     global goal_publisher, goal_reached, navigating
     clear_costmap()
+    time.sleep(5)
     goal_msg = PoseStamped()
     goal_msg.header.stamp = rospy.Time.now()
     goal_msg.header.frame_id = 'map'
@@ -386,7 +387,7 @@ def timeBasedEvents():
             goTo(adl_pos1)
 
 def joyCallback(msg):
-    global ost_pub, instruction_pub, sound_pub
+    global ost_pub, instruction_pub, sound_pub, navigating
     #X starts HPR
     #A starts ros_visual
     #B starts motion_analysis for human
@@ -417,6 +418,12 @@ def joyCallback(msg):
         sound_msg = Sound()
         sound_msg.value = 6
         sound_pub.publish(sound_msg)
+    elif msg.axes[6] == 1:
+        goTo2(-1.44441210017, 2.13687967114, -0.982876826185, 0.184263790659)
+    elif msg.axes[6] == -1:
+        goTo2(-1.55760080472, 1.72284116303, -0.223404316096, 0.97472586482)
+    elif msg.buttons[5] == 1:
+        goTo2(-5.31947212506, -0.82432398283, -0.999158054544, 0.0410266016149)
 
     if msg.buttons[6] == 1:
         cancelNavigationGoal()
