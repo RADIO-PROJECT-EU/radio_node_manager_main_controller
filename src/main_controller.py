@@ -205,7 +205,7 @@ def clear_costmap():
 def saveState():
     global next_state, state_file
     with open(state_file,'w') as f:
-        f.write(next_state)
+        f.write(str(next_state))
 
 def updateState():
     global next_state
