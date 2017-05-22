@@ -503,7 +503,7 @@ def motionAnalysisHuman(start):
             sound_pub.publish(sound_msg)
 
 def motionAnalysisObject(start):
-    global running_motion_analysis_obj, sound_pub, instruction_pub
+    global running_motion_analysis_obj, sound_pub, iinstruction_pub
     if start:
         if not running_motion_analysis_obj:
             if pill_intake_mode == 1:
@@ -516,7 +516,6 @@ def motionAnalysisObject(start):
             subprocess.Popen(command)
             running_motion_analysis_obj = True
             time.sleep(10)
-            ost_pub.publish(2)
             sound_msg = Sound()
             sound_msg.value = 0
             sound_pub.publish(sound_msg)
