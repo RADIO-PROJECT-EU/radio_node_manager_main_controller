@@ -67,7 +67,7 @@ def init():
     state_file = rospack.get_path('radio_node_manager_main_controller')+'/state/saved.state'
 
     if os.path.isfile(state_file):
-        with open(state_file) as f:
+        with open(state_filei, 'r+') as f:
             next_state = int(f.read())
 
     if check_batteries:
@@ -204,7 +204,7 @@ def clear_costmap():
 
 def saveState():
     global next_state, state_file
-    with open(state_file,'w') as f:
+    with open(state_file,'a+') as f:
         f.write(str(next_state))
 
 def updateState():
