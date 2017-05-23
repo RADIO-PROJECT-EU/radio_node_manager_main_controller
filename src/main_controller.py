@@ -523,9 +523,6 @@ def rosVisual(start):
         command = shlex.split(command)
         subprocess.Popen(command)
         running_ros_visual = True
-        sound_msg = Sound()
-        sound_msg.value = 0
-        sound_pub.publish(sound_msg)
     else:
         command = "rosnode kill decision_making"
         command = shlex.split(command)
