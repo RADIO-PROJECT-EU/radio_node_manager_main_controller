@@ -67,7 +67,7 @@ def init():
     state_file = rospack.get_path('radio_node_manager_main_controller')+'/state/saved.state'
 
     if os.path.isfile(state_file):
-        with open(state_filei, 'r+') as f:
+        with open(state_file, 'r+') as f:
             next_state = int(f.read())
 
     if check_batteries:
