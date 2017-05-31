@@ -14,6 +14,7 @@ from kobuki_msgs.msg import SensorState
 from sensor_msgs.msg import BatteryState
 from geometry_msgs.msg import PoseStamped
 from actionlib_msgs.msg import GoalStatusArray
+from radio_services.srv import InstructionWithAnswer
 #from move_base_msgs.msg import MoveBaseActionGoal
 #from motion_detection_sensor_status_publisher.msg import SensorStatusMsg
 
@@ -25,7 +26,6 @@ running_ros_visual = False
 pc_needs_to_charge = False
 kobuki_max_charge = 164 #Validated fully charged battery value
 check_batteries = False
-instruction_pub = None
 goal_publisher = None
 pill_intake_mode = 1
 goal_reached = False
@@ -45,20 +45,17 @@ joy_pub = None
 
 
 def init():
-    global pub_stop, check_batteries, sound_pub, int_pub, instruction_pub
+    global pub_stop, check_batteries, sound_pub
     global state_file, goal_publisher, twist_pub
     rospy.init_node('radio_node_manager_main_controller')
     check_batteries = rospy.get_param("~check_batteries", True)
-    instruction_topic = rospy.get_param("~instruction_topic", "radio_node_manager_main_controller/instruction")
     #rospy.Subscriber('motion_detection_sensor_status_publisher/status', SensorStatusMsg, motionSensorStatus)
     rospy.Subscriber('move_base/status', GoalStatusArray, currentNavStatus)
     rospy.Subscriber('joy', Joy, joyCallback)
     sound_pub = rospy.Publisher('mobile_base/commands/sound', Sound, queue_size=1)
     #rospy.Subscriber("/move_base/goal", PoseStamped, getGoalPoint)
     pub_stop = rospy.Publisher('move_base/cancel', GoalID, queue_size=10)
-    int_pub = rospy.Publisher('radio_generate_report', Int32, queue_size=1)
     twist_pub = rospy.Publisher('cmd_vel_mux/input/navi', Twist, queue_size=1)
-    instruction_pub = rospy.Publisher(instruction_topic, Int32, queue_size=1)
     rospy.Subscriber("android_app/goal", PoseStamped, androidGoal)
     rospy.Subscriber("android_app/other", Int32, androidOther)
     goal_publisher = rospy.Publisher('move_base_simple/goal', PoseStamped, queue_size=1)
@@ -78,7 +75,7 @@ def init():
     initGoalPoints()
     initial_pose()
     clear_costmap()
-    timeBasedEvents()
+    #timeBasedEvents()
 
     while not rospy.is_shutdown():
         rospy.spin()
@@ -188,12 +185,23 @@ def cancelNavigationGoal():
     sound_pub.publish(sound_msg)
 
 def createReport():
-    global int_pub
-    int_pub.publish(0)
-
+    rospy.wait_for_service('radio_report_generation')
+    try:
+        service = rospy.ServiceProxy('radio_report_generation', InstructionWithAnswer)
+        answer = service(0)
+        if answer:
+            sound_msg = Sound()
+            sound_msg.value = 0
+            sound_pub.publish(sound_msg)
+    except rospy.ServiceException, e:
+        print e
 def initial_pose():
-    global instruction_pub
-    instruction_pub.publish(5)
+    rospy.wait_for_service('robot_instruction_receiver')
+    try:
+        service = rospy.ServiceProxy('robot_instruction_receiver', InstructionWithAnswer)
+        answer = service(5)
+    except rospy.ServiceException, e:
+        print e
     time.sleep(10)
 
 def clear_costmap():
@@ -255,8 +263,12 @@ def goChargeNow():
     #checkIfCharging()
 
 def dock():
-    global instruction_pub
-    instruction_pub.publish(4)
+    rospy.wait_for_service('robot_instruction_receiver')
+    try:
+        service = rospy.ServiceProxy('robot_instruction_receiver', InstructionWithAnswer)
+        answer = service(4)
+    except rospy.ServiceException, e:
+        print e
 
 def goTo(x,y,z,w):
     global goal_publisher, goal_reached, navigating
@@ -386,22 +398,22 @@ def timeBasedEvents():
             goTo(adl_pos1)
 
 def joyCallback(msg):
-    global ost_pub, instruction_pub, sound_pub
-    #X starts HPR
-    #A starts ros_visual
-    #B starts motion_analysis for human
-    #Y starts motion_analysis for object
-    #Up/Forward on cross-pad initializes robot position
-    #Back/Select to cancel navigation goal
-    #Start sends a report based on today's date.
-    #R1 pills are placed to the correct position
-    #RightStick[Pressed] enables auto-docking
-    #R2+X stops HPR
-    #R2+A stops ros_visual
-    #R2+B stops motion_analysis for human
-    #R2+Y stops motion_analysis for object
-    #Combinations of the A-B-X-Y buttons are disabled.
-    #You always have to press one of the buttons.
+    global ost_pub, sound_pub
+    # X starts HPR
+    # A starts ros_visual
+    # B starts motion_analysis for human
+    # Y starts motion_analysis for object
+    # Up/Forward on cross-pad initializes robot position
+    # Back/Select to cancel navigation goal
+    # Start sends a report based on today's date.
+    # R1 pills are placed to the correct position
+    # RightStick[Pressed] enables auto-docking
+    # R2+X stops HPR
+    # R2+A stops ros_visual
+    # R2+B stops motion_analysis for human
+    # R2+Y stops motion_analysis for object
+    # Combinations of the A-B-X-Y buttons are disabled.
+    # You always have to press one of the buttons.
     if msg.buttons[0] == 0 and msg.buttons[1] == 0 and msg.buttons[2] == 1 and msg.buttons[3] == 0 and (msg.axes[5] ==0 or msg.axes[5] == 1):
         HPR(True)
     elif msg.buttons[0] == 1 and msg.buttons[1] == 0 and msg.buttons[2] == 0 and msg.buttons[3] == 0 and (msg.axes[5] ==0 or msg.axes[5] == 1):
@@ -415,7 +427,7 @@ def joyCallback(msg):
     elif msg.axes[7] == -1:
         clear_costmap()
         sound_msg = Sound()
-        sound_msg.value = 6
+        sound_msg.value = 0
         sound_pub.publish(sound_msg)
 
     if msg.buttons[6] == 1:
@@ -441,9 +453,15 @@ def joyCallback(msg):
         motionAnalysisObject(False)
 
 def HPR(start):
-    global running_hpr, sound_pub, instruction_pub
+    global running_hpr, sound_pub 
+    print 'here!'
     if start:
-        instruction_pub.publish(0)
+        rospy.wait_for_service('robot_instruction_receiver')
+        try:
+            service = rospy.ServiceProxy('robot_instruction_receiver', InstructionWithAnswer)
+            answer = service(0)
+        except rospy.ServiceException, e:
+            print e
         command = "roslaunch hpr_wrapper  wrapper.launch"
         command = shlex.split(command)
         subprocess.Popen(command)
@@ -471,9 +489,14 @@ def HPR(start):
         sound_pub.publish(sound_msg)
 
 def motionAnalysisHuman(start):
-    global running_motion_analysis_human, sound_pub, instruction_pub
+    global running_motion_analysis_human, sound_pub
     if start:
-        instruction_pub.publish(1)
+        rospy.wait_for_service('robot_instruction_receiver')
+        try:
+            service = rospy.ServiceProxy('robot_instruction_receiver', InstructionWithAnswer)
+            answer = service(1)
+        except rospy.ServiceException, e:
+            print e
         time.sleep(11)
         command = "roslaunch motion_analysis_wrapper wrapper.launch"
         command = shlex.split(command)
@@ -492,12 +515,19 @@ def motionAnalysisHuman(start):
         sound_pub.publish(sound_msg)
 
 def motionAnalysisObject(start):
-    global running_motion_analysis_obj, sound_pub, instruction_pub
+    global running_motion_analysis_obj, sound_pub 
     if start:
+        mode = 0
         if pill_intake_mode == 1:
-            instruction_pub.publish(2)
+            mode = 2
         else:
-            instruction_pub.publish(22)
+            mode = 22
+        rospy.wait_for_service('robot_instruction_receiver')
+        try:
+            service = rospy.ServiceProxy('robot_instruction_receiver', InstructionWithAnswer)
+            answer = service(mode)
+        except rospy.ServiceException, e:
+            print e
         time.sleep(11)
         command = "roslaunch motion_analysis_wrapper wrapper.launch"
         command = shlex.split(command)
@@ -516,9 +546,14 @@ def motionAnalysisObject(start):
         sound_pub.publish(sound_msg)
 
 def rosVisual(start):
-    global running_ros_visual, sound_pub, instruction_pub
+    global running_ros_visual, sound_pub
     if start:
-        instruction_pub.publish(3)
+        rospy.wait_for_service('robot_instruction_receiver')
+        try:
+            service = rospy.ServiceProxy('robot_instruction_receiver', InstructionWithAnswer)
+            answer = service(3)
+        except rospy.ServiceException, e:
+            print e
         command = "roslaunch ros_visual_wrapper wrapper.launch"
         command = shlex.split(command)
         subprocess.Popen(command)
