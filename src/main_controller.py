@@ -454,7 +454,6 @@ def joyCallback(msg):
 
 def HPR(start):
     global running_hpr, sound_pub 
-    print 'here!'
     if start:
         rospy.wait_for_service('robot_instruction_receiver')
         try:
