@@ -26,9 +26,13 @@ running_ros_visual = False
 pc_needs_to_charge = False
 kobuki_max_charge = 164 #Validated fully charged battery value
 check_batteries = False
+chair_position = None
 goal_publisher = None
 pill_intake_mode = 1
 goal_reached = False
+pill_position = None
+walk_position= None
+bed_position = None
 running_hpr = False
 docking_pos = None
 navigating = False
@@ -68,7 +72,6 @@ def init():
             next_state = int(f.read())
 
     if check_batteries:
-        #rospy.Subscriber('placeholder', PlaceHolderMsg, pcBatteryCallback)
         rospy.Subscriber('mobile_base/sensors/core', SensorState, kobukiBatteryCallback)
 
     time.sleep(20)
@@ -111,8 +114,6 @@ def currentNavStatus(current_status_msg):
             if status == 3:
                 navigating = False
                 goal_reached = True
-                #print 'Starting motion_analysis'
-                #print 'Starting HPR'
                 print 'Reached destination!'
 
             if status > 3:
@@ -270,9 +271,10 @@ def dock():
     except rospy.ServiceException, e:
         print e
 
-def goTo(x,y,z,w):
+def goTo2(x,y,z,w):
     global goal_publisher, goal_reached, navigating
     clear_costmap()
+    time.sleep(5)
     goal_msg = PoseStamped()
     goal_msg.header.stamp = rospy.Time.now()
     goal_msg.header.frame_id = 'map'
@@ -287,6 +289,7 @@ def goTo(x,y,z,w):
 def goTo(goal_msg):
     global goal_publisher, goal_reached, navigating
     clear_costmap()
+    time.sleep(5)
     goal_msg.header.stamp = rospy.Time.now()
     goal_publisher.publish(goal_msg)
     goal_reached = False
@@ -294,6 +297,7 @@ def goTo(goal_msg):
 
 def initGoalPoints():
     global adl_pos1, adl_pos2, docking_pos
+    global walk_position, bed_position, pill_position, chair_position
     adl_pos1 = PoseStamped()
     adl_pos1.header.stamp = rospy.Time.now()
     adl_pos1.header.frame_id = 'map'
@@ -317,6 +321,55 @@ def initGoalPoints():
     docking_pos.pose.position.y = 3.57356253611
     docking_pos.pose.orientation.z = 0.972631230579
     docking_pos.pose.orientation.w = -0.231643692
+
+    if rospy.get_param("~enable_gamepad_positions", False):
+        x = rospy.get_param("~bedx", -999)
+        y = rospy.get_param("~bedy", -999)
+        z = rospy.get_param("~bedz", -999)
+        w = rospy.get_param("~bedw", -999)
+        if not (x == -999 and y == x and z == x and w == x):
+            bed_position = PoseStamped()
+            bed_position.header.frame_id = 'map'
+            bed_position.pose.position.x = x
+            bed_position.pose.position.y = y
+            bed_position.pose.orientation.z = z
+            bed_position.pose.orientation.w = w
+
+        x = rospy.get_param("~chairx", -999)
+        y = rospy.get_param("~chairy", -999)
+        z = rospy.get_param("~chairz", -999)
+        w = rospy.get_param("~chairw", -999)
+        if not (x == -999 and y == x and z == x and w == x):
+            chair_position = PoseStamped()
+            chair_position.header.frame_id = 'map'
+            chair_position.pose.position.x = x
+            chair_position.pose.position.y = y
+            chair_position.pose.orientation.z = z
+            chair_position.pose.orientation.w = w
+
+        x = rospy.get_param("~pillx", -999)
+        y = rospy.get_param("~pilly", -999)
+        z = rospy.get_param("~pillz", -999)
+        w = rospy.get_param("~pillw", -999)
+        if not (x == -999 and y == x and z == x and w == x):
+            pill_position = PoseStamped()
+            pill_position.header.frame_id = 'map'
+            pill_position.pose.position.x = x
+            pill_position.pose.position.y = y
+            pill_position.pose.orientation.z = z
+            pill_position.pose.orientation.w = w
+
+        x = rospy.get_param("~walkx", -999)
+        y = rospy.get_param("~walky", -999)
+        z = rospy.get_param("~walkz", -999)
+        w = rospy.get_param("~walkw", -999)
+        if not (x == -999 and y == x and z == x and w == x):
+            walk_position = PoseStamped()
+            walk_position.header.frame_id = 'map'
+            walk_position.pose.position.x = x
+            walk_position.pose.position.y = y
+            walk_position.pose.orientation.z = z
+            walk_position.pose.orientation.w = w
 
 def timeBasedEvents():
     global timeBasedEventsThread, charging
@@ -398,7 +451,7 @@ def timeBasedEvents():
             goTo(adl_pos1)
 
 def joyCallback(msg):
-    global ost_pub, sound_pub
+    global sound_pub
     # X starts HPR
     # A starts ros_visual
     # B starts motion_analysis for human
@@ -434,22 +487,39 @@ def joyCallback(msg):
         cancelNavigationGoal()
     if msg.buttons[7] == 1:
         createReport()
-    '''
-    if msg.buttons[5] == 1:
-        #ost_pub.publish(2)
-        #sound_msg = Sound()
-        #sound_msg.value = 0
-        #sound_pub.publish(sound_msg)
-    '''
-    if msg.buttons[10] == 1:
+    elif msg.axes[6] == 1:
+        if not walk_position is None:
+            goTo(walk_position)
+            sound_msg = Sound()
+            sound_msg.value = 0
+            sound_pub.publish(sound_msg)
+    elif msg.axes[6] == -1:
+        if not chair_position is None:
+            goTo(chair_position)
+            sound_msg = Sound()
+            sound_msg.value = 0
+            sound_pub.publish(sound_msg)
+    elif msg.buttons[5] == 1:
+        if not bed_position is None:
+            goTo(bed_position)
+            sound_msg = Sound()
+            sound_msg.value = 0
+            sound_pub.publish(sound_msg)
+    elif msg.buttons[9] == 1:
+        if not pill_position is None:
+            goTo(pill_position)
+            sound_msg = Sound()
+            sound_msg.value = 0
+            sound_pub.publish(sound_msg)
+    elif msg.buttons[10] == 1:
         dock()
-    if msg.buttons[2] == 1 and msg.axes[5] != 0 and msg.axes[5] != 1:
+    elif msg.buttons[2] == 1 and msg.axes[5] != 0 and msg.axes[5] != 1:
         HPR(False)
-    if msg.buttons[0] == 1 and msg.axes[5] != 0 and msg.axes[5] != 1:
+    elif msg.buttons[0] == 1 and msg.axes[5] != 0 and msg.axes[5] != 1:
         rosVisual(False)
-    if msg.buttons[1] == 1 and msg.axes[5] != 0 and msg.axes[5] != 1:
+    elif msg.buttons[1] == 1 and msg.axes[5] != 0 and msg.axes[5] != 1:
         motionAnalysisHuman(False)
-    if msg.buttons[3] == 1 and msg.axes[5] != 0 and msg.axes[5] != 1:
+    elif msg.buttons[3] == 1 and msg.axes[5] != 0 and msg.axes[5] != 1:
         motionAnalysisObject(False)
 
 def HPR(start):
