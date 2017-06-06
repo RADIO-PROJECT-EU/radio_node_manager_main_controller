@@ -505,13 +505,13 @@ def joyCallback(msg):
             sound_msg = Sound()
             sound_msg.value = 0
             sound_pub.publish(sound_msg)
-    elif msg.buttons[9] == 1:
+    elif msg.buttons[9] == 1 and msg.axes[5] != 0 and msg.axes[5] != 1:
         if not pill_position is None:
             goTo(pill_position)
             sound_msg = Sound()
             sound_msg.value = 0
             sound_pub.publish(sound_msg)
-    elif msg.buttons[10] == 1:
+    elif msg.buttons[10] == 1 and msg.axes[5] != 0 and msg.axes[5] != 1:
         dock()
     elif msg.buttons[2] == 1 and msg.axes[5] != 0 and msg.axes[5] != 1:
         HPR(False)
