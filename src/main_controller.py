@@ -483,9 +483,9 @@ def joyCallback(msg):
         sound_msg.value = 0
         sound_pub.publish(sound_msg)
 
-    if msg.buttons[6] == 1:
+    elif msg.buttons[6] == 1:
         cancelNavigationGoal()
-    if msg.buttons[7] == 1:
+    elif msg.buttons[7] == 1:
         createReport()
     elif msg.axes[6] == 1 and msg.axes[5] != 0 and msg.axes[5] != 1:
         if not walk_position is None:
