@@ -487,19 +487,19 @@ def joyCallback(msg):
         cancelNavigationGoal()
     if msg.buttons[7] == 1:
         createReport()
-    elif msg.axes[6] == 1:
+    elif msg.axes[6] == 1 and msg.axes[5] != 0 and msg.axes[5] != 1:
         if not walk_position is None:
             goTo(walk_position)
             sound_msg = Sound()
             sound_msg.value = 0
             sound_pub.publish(sound_msg)
-    elif msg.axes[6] == -1:
+    elif msg.axes[6] == -1 and msg.axes[5] != 0 and msg.axes[5] != 1:
         if not chair_position is None:
             goTo(chair_position)
             sound_msg = Sound()
             sound_msg.value = 0
             sound_pub.publish(sound_msg)
-    elif msg.buttons[5] == 1:
+    elif msg.buttons[5] == 1 and msg.axes[5] != 0 and msg.axes[5] != 1:
         if not bed_position is None:
             goTo(bed_position)
             sound_msg = Sound()

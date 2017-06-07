@@ -1,0 +1,29 @@
+# If true, subscribe to the core sensors topic to check battery level
+check_batteries: True
+
+# If this variable is false, the positions that follow will be disregarded
+enable_gamepad_positions: True
+
+# Bed transfer position
+bedx: 7.52524995804
+bedy: 1.65003049374
+bedz: -0.991709037064
+bedw: 0.128503641218
+
+# Chair transfer position
+chairx: 1.93248009682
+chairy: -1.4424059391
+chairz: 0.373706794111 
+chairw: 0.9275468894
+
+# Walking position
+walkx: 1.33442270756
+walky: -3.41919517517
+walkz: 0.215121569688
+walkw: 0.976587277336
+
+# Pill intake position
+pillx: 1.33442270756
+pilly: -3.41919517517
+pillz: 0.215121569688
+pillw: 0.976587277336
