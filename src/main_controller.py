@@ -171,7 +171,6 @@ def pcBatteryCallback(msg):
     else:
         pc_needs_to_charge = False
 
-
 def kobukiBatteryCallback(msg):
     global kobuki_max_charge, charging, pc_needs_to_charge, navigating
     global curr_battery
@@ -186,7 +185,7 @@ def cancelNavigationGoal():
     sound_pub.publish(sound_msg)
 
 def createReport():
-    rospy.wait_for_service('radio_report_generation')
+    rospy.wait_for_service('radio_report_generation', timeout = 10)
     try:
         service = rospy.ServiceProxy('radio_report_generation', InstructionWithAnswer)
         answer = service(0)
@@ -196,8 +195,9 @@ def createReport():
             sound_pub.publish(sound_msg)
     except rospy.ServiceException, e:
         print e
+
 def initial_pose():
-    rospy.wait_for_service('robot_instruction_receiver')
+    rospy.wait_for_service('robot_instruction_receiver', timeout = 10)
     try:
         service = rospy.ServiceProxy('robot_instruction_receiver', InstructionWithAnswer)
         answer = service(5)
@@ -264,7 +264,7 @@ def goChargeNow():
     #checkIfCharging()
 
 def dock():
-    rospy.wait_for_service('robot_instruction_receiver')
+    rospy.wait_for_service('robot_instruction_receiver', timeout = 10)
     try:
         service = rospy.ServiceProxy('robot_instruction_receiver', InstructionWithAnswer)
         answer = service(4)
@@ -483,9 +483,9 @@ def joyCallback(msg):
         sound_msg.value = 0
         sound_pub.publish(sound_msg)
 
-    elif msg.buttons[6] == 1:
+    if msg.buttons[6] == 1:
         cancelNavigationGoal()
-    elif msg.buttons[7] == 1:
+    if msg.buttons[7] == 1:
         createReport()
     elif msg.axes[6] == 1 and msg.axes[5] != 0 and msg.axes[5] != 1:
         if not walk_position is None:
@@ -523,133 +523,76 @@ def joyCallback(msg):
         motionAnalysisObject(False)
 
 def HPR(start):
-    global running_hpr, sound_pub 
+    global running_hpr 
+    rospy.wait_for_service('robot_instruction_receiver', timeout = 10)
     if start:
-        rospy.wait_for_service('robot_instruction_receiver')
         try:
             service = rospy.ServiceProxy('robot_instruction_receiver', InstructionWithAnswer)
             answer = service(0)
+            running_hpr = True
         except rospy.ServiceException, e:
             print e
-        command = "roslaunch hpr_wrapper  wrapper.launch"
-        command = shlex.split(command)
-        subprocess.Popen(command)
-        running_hpr = True
     else:
-        command = "rosnode kill laser_analysis"
-        command = shlex.split(command)
-        subprocess.Popen(command)
-        command = "rosnode kill laser_overlap_trace"
-        command = shlex.split(command)
-        subprocess.Popen(command)
-        command = "rosnode kill laser_clustering"
-        command = shlex.split(command)
-        subprocess.Popen(command)
-        command = "rosnode kill laser_wall_extraction"
-        command = shlex.split(command)
-        subprocess.Popen(command)
-        subprocess.Popen(command)
-        command = "rosnode kill hpr_wrapper"
-        command = shlex.split(command)
-        subprocess.Popen(command)
-        running_hpr = False
-        sound_msg = Sound()
-        sound_msg.value = 1
-        sound_pub.publish(sound_msg)
+        try:
+            service = rospy.ServiceProxy('robot_instruction_receiver', InstructionWithAnswer)
+            answer = service(10)
+            running_hpr = False
+        except rospy.ServiceException, e:
+            print e
 
 def motionAnalysisHuman(start):
-    global running_motion_analysis_human, sound_pub
+    global running_motion_analysis_human
+    rospy.wait_for_service('robot_instruction_receiver', timeout = 10)
     if start:
-        rospy.wait_for_service('robot_instruction_receiver')
         try:
             service = rospy.ServiceProxy('robot_instruction_receiver', InstructionWithAnswer)
             answer = service(1)
+            running_motion_analysis_human = True
         except rospy.ServiceException, e:
             print e
-        time.sleep(11)
-        command = "roslaunch motion_analysis_wrapper wrapper.launch"
-        command = shlex.split(command)
-        subprocess.Popen(command)
-        running_motion_analysis_human = True
     else:
-        command = "rosnode kill motion_analysis"
-        command = shlex.split(command)
-        subprocess.Popen(command)
-        command = "rosnode kill motion_analysis_wrapper"
-        command = shlex.split(command)
-        subprocess.Popen(command)
-        running_motion_analysis_human = False
-        sound_msg = Sound()
-        sound_msg.value = 1
-        sound_pub.publish(sound_msg)
-
-def motionAnalysisObject(start):
-    global running_motion_analysis_obj, sound_pub 
-    if start:
-        mode = 0
-        if pill_intake_mode == 1:
-            mode = 2
-        else:
-            mode = 22
-        rospy.wait_for_service('robot_instruction_receiver')
         try:
             service = rospy.ServiceProxy('robot_instruction_receiver', InstructionWithAnswer)
-            answer = service(mode)
+            answer = service(11)
+            running_motion_analysis_human = False
         except rospy.ServiceException, e:
             print e
-        time.sleep(11)
-        command = "roslaunch motion_analysis_wrapper wrapper.launch"
-        command = shlex.split(command)
-        subprocess.Popen(command)
-        running_motion_analysis_obj = True
+
+def motionAnalysisObject(start):
+    global running_motion_analysis_obj
+    if start:
+        try:
+            service = rospy.ServiceProxy('robot_instruction_receiver', InstructionWithAnswer)
+            answer = service(2)
+            running_motion_analysis_obj = True
+        except rospy.ServiceException, e:
+            print e
     else:
-        command = "rosnode kill motion_analysis"
-        command = shlex.split(command)
-        subprocess.Popen(command)
-        command = "rosnode kill motion_analysis_wrapper"
-        command = shlex.split(command)
-        subprocess.Popen(command)
-        running_motion_analysis_obj = False
-        sound_msg = Sound()
-        sound_msg.value = 1
-        sound_pub.publish(sound_msg)
+        try:
+            service = rospy.ServiceProxy('robot_instruction_receiver', InstructionWithAnswer)
+            answer = service(11)
+            running_motion_analysis_obj = False
+        except rospy.ServiceException, e:
+            print e
 
 def rosVisual(start):
-    global running_ros_visual, sound_pub
+    global running_ros_visual
     if start:
-        rospy.wait_for_service('robot_instruction_receiver')
+        rospy.wait_for_service('robot_instruction_receiver', timeout = 10)
         try:
             service = rospy.ServiceProxy('robot_instruction_receiver', InstructionWithAnswer)
             answer = service(3)
+            running_ros_visual = True
         except rospy.ServiceException, e:
             print e
-        command = "roslaunch ros_visual_wrapper wrapper.launch"
-        command = shlex.split(command)
-        subprocess.Popen(command)
-        running_ros_visual = True
     else:
-        command = "rosnode kill decision_making"
-        command = shlex.split(command)
-        subprocess.Popen(command)
-        command = "rosnode kill fusion"
-        command = shlex.split(command)
-        subprocess.Popen(command)
-        command = "rosnode kill depth"
-        command = shlex.split(command)
-        subprocess.Popen(command)
-        command = "rosnode kill chroma"
-        command = shlex.split(command)
-        subprocess.Popen(command)
-        command = "rosnode kill classifier"
-        command = shlex.split(command)
-        subprocess.Popen(command)
-        command = "rosnode kill ros_visual_wrapper"
-        command = shlex.split(command)
-        subprocess.Popen(command)
-        running_ros_visual = False
-        sound_msg = Sound()
-        sound_msg.value = 1
-        sound_pub.publish(sound_msg)
+        rospy.wait_for_service('robot_instruction_receiver', timeout = 10)
+        try:
+            service = rospy.ServiceProxy('robot_instruction_receiver', InstructionWithAnswer)
+            answer = service(13)
+            running_ros_visual = False
+        except rospy.ServiceException, e:
+            print e
 
 if __name__ == '__main__':
     init()
