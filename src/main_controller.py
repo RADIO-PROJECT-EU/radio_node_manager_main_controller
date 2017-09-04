@@ -6,6 +6,7 @@ import rospy, rospkg
 import subprocess, shlex
 from datetime import datetime
 from std_msgs.msg import Int32
+from std_msgs.msg import String
 from sensor_msgs.msg import Joy
 from kobuki_msgs.msg import Sound
 from geometry_msgs.msg import Twist
@@ -15,6 +16,7 @@ from sensor_msgs.msg import BatteryState
 from geometry_msgs.msg import PoseStamped
 from actionlib_msgs.msg import GoalStatusArray
 from radio_services.srv import InstructionWithAnswer
+from radio_services.srv import InstructionAndStringWithAnswer
 #from move_base_msgs.msg import MoveBaseActionGoal
 #from motion_detection_sensor_status_publisher.msg import SensorStatusMsg
 
@@ -62,6 +64,7 @@ def init():
     twist_pub = rospy.Publisher('cmd_vel_mux/input/navi', Twist, queue_size=1)
     rospy.Subscriber("android_app/goal", PoseStamped, androidGoal)
     rospy.Subscriber("android_app/other", Int32, androidOther)
+    rospy.Subscriber("android_app/record_adl", String, androidAppCallback)
     goal_publisher = rospy.Publisher('move_base_simple/goal', PoseStamped, queue_size=1)
 
     rospack = rospkg.RosPack()
@@ -74,7 +77,7 @@ def init():
     if check_batteries:
         rospy.Subscriber('mobile_base/sensors/core', SensorState, kobukiBatteryCallback)
 
-    time.sleep(20)
+    #time.sleep(20)
     initGoalPoints()
     initial_pose()
     clear_costmap()
@@ -468,12 +471,16 @@ def joyCallback(msg):
     # Combinations of the A-B-X-Y buttons are disabled.
     # You always have to press one of the buttons.
     if msg.buttons[0] == 0 and msg.buttons[1] == 0 and msg.buttons[2] == 1 and msg.buttons[3] == 0 and (msg.axes[5] ==0 or msg.axes[5] == 1):
+        startADLWrapper(1)
         HPR(True)
     elif msg.buttons[0] == 1 and msg.buttons[1] == 0 and msg.buttons[2] == 0 and msg.buttons[3] == 0 and (msg.axes[5] ==0 or msg.axes[5] == 1):
+        startADLWrapper(2)
         rosVisual(True)
     elif msg.buttons[0] == 0 and msg.buttons[1] == 1 and msg.buttons[2] == 0 and msg.buttons[3] == 0 and (msg.axes[5] ==0 or msg.axes[5] == 1):
+        startADLWrapper(3)
         motionAnalysisHuman(True)
     elif msg.buttons[0] == 0 and msg.buttons[1] == 0 and msg.buttons[2] == 0 and msg.buttons[3] == 1 and (msg.axes[5] ==0 or msg.axes[5] == 1):
+        startADLWrapper(4)
         motionAnalysisObject(True)
     elif msg.axes[7] == 1:
         initial_pose()
@@ -482,7 +489,6 @@ def joyCallback(msg):
         sound_msg = Sound()
         sound_msg.value = 0
         sound_pub.publish(sound_msg)
-
     if msg.buttons[6] == 1:
         cancelNavigationGoal()
     if msg.buttons[7] == 1:
@@ -514,13 +520,38 @@ def joyCallback(msg):
     elif msg.buttons[10] == 1 and msg.axes[5] != 0 and msg.axes[5] != 1:
         dock()
     elif msg.buttons[2] == 1 and msg.axes[5] != 0 and msg.axes[5] != 1:
+        startADLWrapper(11)
         HPR(False)
     elif msg.buttons[0] == 1 and msg.axes[5] != 0 and msg.axes[5] != 1:
+        startADLWrapper(12)
         rosVisual(False)
     elif msg.buttons[1] == 1 and msg.axes[5] != 0 and msg.axes[5] != 1:
+        startADLWrapper(13)
         motionAnalysisHuman(False)
     elif msg.buttons[3] == 1 and msg.axes[5] != 0 and msg.axes[5] != 1:
+        startADLWrapper(13)
         motionAnalysisObject(False)
+
+def androidAppCallback(msg):
+    msg_ = msg.data.split('#')
+    command = int(msg_[0])
+    name = msg_[1]
+    startADLWrapper(command, name)
+    if command == 1:
+        HPR(True)
+    elif command == 2:
+        rosVisual(True)
+    elif command == 3:
+        motionAnalysisHuman(True)
+    elif command == 4:
+        motionAnalysisHuman(True)
+    elif command == 11:
+        HPR(Flase)
+    elif command == 12:
+        rosVisual(False)
+    elif command == 13:
+        motionAnalysisHuman(False)
+
 
 def HPR(start):
     global running_hpr 
@@ -560,6 +591,7 @@ def motionAnalysisHuman(start):
 
 def motionAnalysisObject(start):
     global running_motion_analysis_obj
+    rospy.wait_for_service('robot_instruction_receiver', timeout = 10)
     if start:
         try:
             service = rospy.ServiceProxy('robot_instruction_receiver', InstructionWithAnswer)
@@ -593,6 +625,36 @@ def rosVisual(start):
             running_ros_visual = False
         except rospy.ServiceException, e:
             print e
+
+def startADLWrapper(command, name='NONAME'):
+    service_name = ''
+    if command == 1:
+        command = 1
+        service_name = '/hpr_wrapper/node_state_service'
+    elif command == 11:
+        command = 0
+        service_name = '/hpr_wrapper/node_state_service'
+    elif command == 2:
+        command = 1
+        service_name = '/ros_visual_wrapper/node_state_service'
+    elif command == 12:
+        command = 0
+        service_name = '/ros_visual_wrapper/node_state_service'
+    elif command == 3:
+        command = 1
+        service_name = '/motion_analysis_wrapper/node_state_service'
+    elif command == 13:
+        command = 0
+        service_name = '/motion_analysis_wrapper/node_state_service'
+    elif command == 4:
+        command = 2
+        service_name = '/motion_analysis_wrapper/node_state_service'
+    rospy.wait_for_service(service_name, timeout = 10)
+    try:
+        service = rospy.ServiceProxy(service_name, InstructionAndStringWithAnswer)
+        answer = service(command, name)
+    except rospy.ServiceException, e:
+        print e
 
 if __name__ == '__main__':
     init()
