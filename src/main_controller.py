@@ -536,7 +536,8 @@ def androidAppCallback(msg):
     msg_ = msg.data.split('#')
     command = int(msg_[0])
     name = msg_[1]
-    startADLWrapper(command, name)
+    repetition = msg_[2]
+    startADLWrapper(command, name, repetition)
     if command == 1:
         HPR(True)
     elif command == 2:
@@ -544,9 +545,9 @@ def androidAppCallback(msg):
     elif command == 3:
         motionAnalysisHuman(True)
     elif command == 4:
-        motionAnalysisHuman(True)
+        motionAnalysisObject(True)
     elif command == 11:
-        HPR(Flase)
+        HPR(False)
     elif command == 12:
         rosVisual(False)
     elif command == 13:
@@ -626,7 +627,7 @@ def rosVisual(start):
         except rospy.ServiceException, e:
             print e
 
-def startADLWrapper(command, name='NONAME'):
+def startADLWrapper(command, name='NONAME', repetition='NOREPETITION'):
     service_name = ''
     if command == 1:
         command = 1
@@ -652,7 +653,7 @@ def startADLWrapper(command, name='NONAME'):
     rospy.wait_for_service(service_name, timeout = 10)
     try:
         service = rospy.ServiceProxy(service_name, InstructionAndStringWithAnswer)
-        answer = service(command, name)
+        answer = service(command, name, repetition)
     except rospy.ServiceException, e:
         print e
 
