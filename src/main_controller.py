@@ -188,23 +188,23 @@ def cancelNavigationGoal():
     sound_pub.publish(sound_msg)
 
 def createReport():
-    rospy.wait_for_service('radio_report_generation', timeout = 10)
     try:
+        rospy.wait_for_service('radio_report_generation', timeout = 10)
         service = rospy.ServiceProxy('radio_report_generation', InstructionWithAnswer)
         answer = service(0)
         if answer:
             sound_msg = Sound()
             sound_msg.value = 0
             sound_pub.publish(sound_msg)
-    except rospy.ServiceException, e:
+    except (rospy.ServiceException, rospy.exceptions.ROSException) as e:
         print e
 
 def initial_pose():
-    rospy.wait_for_service('robot_instruction_receiver', timeout = 10)
     try:
+        rospy.wait_for_service('robot_instruction_receiver', timeout = 10)
         service = rospy.ServiceProxy('robot_instruction_receiver', InstructionWithAnswer)
         answer = service(5)
-    except rospy.ServiceException, e:
+    except (rospy.ServiceException, rospy.exceptions.ROSException) as e:
         print e
     time.sleep(10)
 
@@ -267,11 +267,11 @@ def goChargeNow():
     #checkIfCharging()
 
 def dock():
-    rospy.wait_for_service('robot_instruction_receiver', timeout = 10)
     try:
+        rospy.wait_for_service('robot_instruction_receiver', timeout = 10)
         service = rospy.ServiceProxy('robot_instruction_receiver', InstructionWithAnswer)
         answer = service(4)
-    except rospy.ServiceException, e:
+    except (rospy.ServiceException, rospy.exceptions.ROSException) as e:
         print e
 
 def goTo2(x,y,z,w):
@@ -556,75 +556,78 @@ def androidAppCallback(msg):
 
 def HPR(start):
     global running_hpr 
-    rospy.wait_for_service('robot_instruction_receiver', timeout = 10)
     if start:
         try:
+            rospy.wait_for_service('robot_instruction_receiver', timeout = 10)
             service = rospy.ServiceProxy('robot_instruction_receiver', InstructionWithAnswer)
             answer = service(0)
             running_hpr = True
-        except rospy.ServiceException, e:
+        except (rospy.ServiceException, rospy.exceptions.ROSException) as e:
             print e
     else:
         try:
+            rospy.wait_for_service('robot_instruction_receiver', timeout = 10)
             service = rospy.ServiceProxy('robot_instruction_receiver', InstructionWithAnswer)
             answer = service(10)
             running_hpr = False
-        except rospy.ServiceException, e:
+        except (rospy.ServiceException, rospy.exceptions.ROSException) as e:
             print e
 
 def motionAnalysisHuman(start):
     global running_motion_analysis_human
-    rospy.wait_for_service('robot_instruction_receiver', timeout = 10)
     if start:
         try:
+            rospy.wait_for_service('robot_instruction_receiver', timeout = 10)
             service = rospy.ServiceProxy('robot_instruction_receiver', InstructionWithAnswer)
             answer = service(1)
             running_motion_analysis_human = True
-        except rospy.ServiceException, e:
+        except (rospy.ServiceException, rospy.exceptions.ROSException) as e:
             print e
     else:
         try:
+            rospy.wait_for_service('robot_instruction_receiver', timeout = 10)
             service = rospy.ServiceProxy('robot_instruction_receiver', InstructionWithAnswer)
             answer = service(11)
             running_motion_analysis_human = False
-        except rospy.ServiceException, e:
+        except (rospy.ServiceException, rospy.exceptions.ROSException) as e:
             print e
 
 def motionAnalysisObject(start):
     global running_motion_analysis_obj
-    rospy.wait_for_service('robot_instruction_receiver', timeout = 10)
     if start:
         try:
+            rospy.wait_for_service('robot_instruction_receiver', timeout = 10)
             service = rospy.ServiceProxy('robot_instruction_receiver', InstructionWithAnswer)
             answer = service(2)
             running_motion_analysis_obj = True
-        except rospy.ServiceException, e:
+        except (rospy.ServiceException, rospy.exceptions.ROSException) as e:
             print e
     else:
         try:
+            rospy.wait_for_service('robot_instruction_receiver', timeout = 10)
             service = rospy.ServiceProxy('robot_instruction_receiver', InstructionWithAnswer)
             answer = service(11)
             running_motion_analysis_obj = False
-        except rospy.ServiceException, e:
+        except (rospy.ServiceException, rospy.exceptions.ROSException) as e:
             print e
 
 def rosVisual(start):
     global running_ros_visual
     if start:
-        rospy.wait_for_service('robot_instruction_receiver', timeout = 10)
         try:
+            rospy.wait_for_service('robot_instruction_receiver', timeout = 10)
             service = rospy.ServiceProxy('robot_instruction_receiver', InstructionWithAnswer)
             answer = service(3)
             running_ros_visual = True
-        except rospy.ServiceException, e:
+        except (rospy.ServiceException, rospy.exceptions.ROSException) as e:
             print e
     else:
-        rospy.wait_for_service('robot_instruction_receiver', timeout = 10)
         try:
+            rospy.wait_for_service('robot_instruction_receiver', timeout = 10)
             service = rospy.ServiceProxy('robot_instruction_receiver', InstructionWithAnswer)
             answer = service(13)
             running_ros_visual = False
-        except rospy.ServiceException, e:
+        except (rospy.ServiceException, rospy.exceptions.ROSException) as e:
             print e
 
 def startADLWrapper(command, name='NONAME', repetition='NOREPETITION'):
@@ -650,11 +653,11 @@ def startADLWrapper(command, name='NONAME', repetition='NOREPETITION'):
     elif command == 4:
         command = 2
         service_name = '/motion_analysis_wrapper/node_state_service'
-    rospy.wait_for_service(service_name, timeout = 10)
     try:
+        rospy.wait_for_service(service_name, timeout = 10)
         service = rospy.ServiceProxy(service_name, InstructionAndStringWithAnswer)
         answer = service(command, name, repetition)
-    except rospy.ServiceException, e:
+    except (rospy.ServiceException, rospy.exceptions.ROSException) as e:
         print e
 
 if __name__ == '__main__':
