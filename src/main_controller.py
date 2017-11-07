@@ -32,6 +32,7 @@ chair_position = None
 goal_publisher = None
 pill_intake_mode = 1
 goal_reached = False
+keys_location = None
 pill_position = None
 walk_position= None
 bed_position = None
@@ -55,6 +56,7 @@ def init():
     global state_file, goal_publisher, twist_pub
     rospy.init_node('radio_node_manager_main_controller')
     check_batteries = rospy.get_param("~check_batteries", True)
+    key_finder = rospy.get_param("~enable_key_finder", True)
     #rospy.Subscriber('motion_detection_sensor_status_publisher/status', SensorStatusMsg, motionSensorStatus)
     rospy.Subscriber('move_base/status', GoalStatusArray, currentNavStatus)
     rospy.Subscriber('joy', Joy, joyCallback)
@@ -65,6 +67,8 @@ def init():
     rospy.Subscriber("android_app/goal", PoseStamped, androidGoal)
     rospy.Subscriber("android_app/other", Int32, androidOther)
     rospy.Subscriber("android_app/record_adl", String, androidAppCallback)
+    if key_finder:
+        rospy.Subscriber("room_status_publisher/keys_location", PoseStamped, keysLocationCallback)
     goal_publisher = rospy.Publisher('move_base_simple/goal', PoseStamped, queue_size=1)
 
     rospack = rospkg.RosPack()
@@ -131,6 +135,10 @@ def currentNavStatus(current_status_msg):
                 motionAnalysisObject(False)
                 navigating = True
 
+def keysLocationCallback(msg):
+    global keys_location
+    keys_location = msg
+
 def androidGoal(goal_msg):
     global goal_publisher, docking_pos
     # Here we can check anything we need before publishing
@@ -146,6 +154,7 @@ def androidGoal(goal_msg):
         goTo(docking_pos)
 
 def androidOther(msg):
+    global keys_location
     # Map:
     # -1 = Cancel navigation goal
     # More to come (?)
@@ -154,6 +163,8 @@ def androidOther(msg):
         # the message coming from the user's android app
         # For now, just send the robot the cancel goal message
         cancelNavigationGoal()
+    if msg.data == 1: # Find my keys!
+        goTo(keys_location)
 
 def getGoalPoint(goal_msg):
     print goal_msg

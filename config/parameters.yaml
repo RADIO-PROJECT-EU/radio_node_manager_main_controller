@@ -1,6 +1,8 @@
 check_batteries: True
 
-enable_gamepad_positions: False
+enable_gamepad_positions: True
+
+enable_key_finder: True
 
 bedx: -5.31947212506
 bedy: -0.82432398283
