@@ -54,9 +54,11 @@ joy_pub = None
 def init():
     global pub_stop, check_batteries, sound_pub
     global state_file, goal_publisher, twist_pub
+    global keys_location
     rospy.init_node('radio_node_manager_main_controller')
     check_batteries = rospy.get_param("~check_batteries", True)
     key_finder = rospy.get_param("~enable_key_finder", True)
+    keys_location = PoseStamped()
     #rospy.Subscriber('motion_detection_sensor_status_publisher/status', SensorStatusMsg, motionSensorStatus)
     rospy.Subscriber('move_base/status', GoalStatusArray, currentNavStatus)
     rospy.Subscriber('joy', Joy, joyCallback)
